@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Italiano Tetris</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: #fafaf8;
+    --card: #ffffff;
+    --accent: #4f7cff;
+    --accent-light: #e8edff;
+    --text: #2a2a2a;
+    --text-dim: #8a8a8a;
+    --success: #34c759;
+    --error: #ff6b6b;
+    --border: #ececec;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100vh; padding: 16px; overflow-x: hidden;
+  }
+  .header {
+    width: 100%; max-width: 420px; display: flex; justify-content: space-between;
+    align-items: center; margin-bottom: 12px;
+  }
+  .progress-wrap { flex: 1; height: 8px; background: var(--border); border-radius: 4px; margin: 0 12px; overflow: hidden; }
+  .progress-bar { height: 100%; background: var(--accent); width: 0%; transition: width .4s ease; border-radius: 4px; }
+  .stat { font-size: 14px; color: var(--text-dim); font-weight: 600; white-space: nowrap; }
+  .score { font-size: 14px; font-weight: 700; color: var(--accent); }
+
+  .game-area {
+    width: 100%; max-width: 420px; height: 380px; background: var(--card);
+    border-radius: 20px; position: relative; overflow: hidden;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.04); border: 1px solid var(--border);
+  }
+  .falling-word {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    background: var(--accent-light); color: var(--accent);
+    padding: 14px 28px; border-radius: 14px; font-size: 22px; font-weight: 700;
+    top: -60px; transition: top linear; white-space: nowrap;
+  }
+  .baskets {
+    position: absolute; bottom: 12px; left: 0; right: 0;
+    display: flex; gap: 8px; padding: 0 12px;
+  }
+  .basket {
+    flex: 1; background: var(--bg); border: 2px solid var(--border);
+    border-radius: 14px; padding: 14px 8px; text-align: center;
+    font-size: 15px; font-weight: 600; color: var(--text); cursor: pointer;
+    transition: all .15s ease; user-select: none;
+  }
+  .basket:active { transform: scale(0.96); }
+  .basket.correct { background: var(--success); border-color: var(--success); color: white; }
+  .basket.wrong { background: var(--error); border-color: var(--error); color: white; }
+
+  .feedback-overlay {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    font-size: 48px; pointer-events: none;
+  }
+
+  .round-end {
+    width: 100%; max-width: 420px; text-align: center; margin-top: 60px;
+  }
+  .round-end h2 { font-size: 26px; margin-bottom: 8px; }
+  .round-end p { color: var(--text-dim); font-size: 15px; margin-bottom: 24px; }
+  .btn {
+    background: var(--accent); color: white; border: none; padding: 16px 32px;
+    border-radius: 14px; font-size: 17px; font-weight: 700; cursor: pointer; width: 100%;
+    max-width: 420px;
+  }
+  .btn:active { opacity: 0.85; }
+  .example-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+    padding: 16px; margin-top: 14px; width: 100%; max-width: 420px; text-align: left;
+    display: none;
+  }
+  .example-card .it { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
+  .example-card .ru { color: var(--text-dim); font-size: 14px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="game-screen">
+  <div class="header">
+    <div class="stat" id="round-label">Слово 1/5</div>
+    <div class="progress-wrap"><div class="progress-bar" id="progress"></div></div>
+    <div class="score" id="score">⭐ 0</div>
+  </div>
+
+  <div class="game-area" id="game-area">
+    <div class="falling-word" id="falling-word">ciao</div>
+    <div class="baskets" id="baskets"></div>
+  </div>
+
+  <div class="example-card" id="example-card">
+    <div class="it" id="example-it"></div>
+    <div class="ru" id="example-ru"></div>
+  </div>
+</div>
+
+<div id="end-screen" class="round-end hidden">
+  <h2>🎉 Раунд пройден!</h2>
+  <p id="end-stats">Ты выучил 5 слов</p>
+  <button class="btn" onclick="startRound()">Следующий раунд</button>
+</div>
+
+<script>
+const tg = window.Telegram?.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
+
+// Базовый словарь A1 — потом заменим на загрузку из БД/JSON
+const WORDS = [
+  { it: "ciao", ru: "привет/пока", wrong: ["grazie", "buono"], example_it: "Ciao, come stai?", example_ru: "Привет, как дела?" },
+  { it: "grazie", ru: "спасибо", wrong: ["prego", "scusa"], example_it: "Grazie mille per l'aiuto!", example_ru: "Большое спасибо за помощь!" },
+  { it: "acqua", ru: "вода", wrong: ["pane", "casa"], example_it: "Vorrei un bicchiere d'acqua.", example_ru: "Я бы хотел стакан воды." },
+  { it: "casa", ru: "дом", wrong: ["strada", "scuola"], example_it: "Vado a casa adesso.", example_ru: "Я сейчас иду домой." },
+  { it: "amico", ru: "друг", wrong: ["nemico", "fratello"], example_it: "Lui è il mio migliore amico.", example_ru: "Он мой лучший друг." }
+];
+
+let order = [];
+let current = 0;
+let score = 0;
+let fallTimer = null;
+
+function shuffle(arr) {
+  return [...arr].sort(() => Math.random() - 0.5);
+}
+
+function startRound() {
+  document.getElementById('end-screen').classList.add('hidden');
+  document.getElementById('game-screen').classList.remove('hidden');
+  order = shuffle(WORDS);
+  current = 0;
+  score = 0;
+  updateScore();
+  nextWord();
+}
+
+function updateScore() {
+  document.getElementById('score').textContent = `⭐ ${score}`;
+}
+
+function nextWord() {
+  document.getElementById('example-card').style.display = 'none';
+  if (current >= order.length) {
+    endRound();
+    return;
+  }
+  const word = order[current];
+  document.getElementById('round-label').textContent = `Слово ${current + 1}/${order.length}`;
+  document.getElementById('progress').style.width = `${(current / order.length) * 100}%`;
+
+  const wordEl = document.getElementById('falling-word');
+  wordEl.textContent = word.it;
+  wordEl.style.transition = 'none';
+  wordEl.style.top = '-60px';
+  void wordEl.offsetWidth; // reflow
+  wordEl.style.transition = `top ${getSpeed()}s linear`;
+
+  const options = shuffle([word.ru, ...word.wrong]);
+  const basketsEl = document.getElementById('baskets');
+  basketsEl.innerHTML = '';
+  options.forEach(opt => {
+    const b = document.createElement('div');
+    b.className = 'basket';
+    b.textContent = opt;
+    b.onclick = () => handleAnswer(opt === word.ru, b, word);
+    basketsEl.appendChild(b);
+  });
+
+  requestAnimationFrame(() => {
+    wordEl.style.top = '280px';
+  });
+
+  clearTimeout(fallTimer);
+  fallTimer = setTimeout(() => {
+    handleAnswer(false, null, word);
+  }, getSpeed() * 1000);
+}
+
+function getSpeed() {
+  return 5; // секунд на падение — потом сделаем настройку
+}
+
+function handleAnswer(isCorrect, basketEl, word) {
+  clearTimeout(fallTimer);
+  document.querySelectorAll('.basket').forEach(b => b.onclick = null);
+
+  if (basketEl) {
+    basketEl.classList.add(isCorrect ? 'correct' : 'wrong');
+  }
+  if (isCorrect) {
+    score += 10;
+    updateScore();
+    if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+  } else {
+    if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
+  }
+
+  // показываем карточку с примером использования
+  const card = document.getElementById('example-card');
+  document.getElementById('example-it').textContent = word.example_it;
+  document.getElementById('example-ru').textContent = word.example_ru;
+  card.style.display = 'block';
+
+  setTimeout(() => {
+    current++;
+    nextWord();
+  }, 1600);
+}
+
+function endRound() {
+  document.getElementById('game-screen').classList.add('hidden');
+  document.getElementById('end-screen').classList.remove('hidden');
+  document.getElementById('end-stats').textContent = `Ты набрал ${score} очков из ${order.length * 10}`;
+  if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+}
+
+startRound();
+</script>
+</body>
+</html>
