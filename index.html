@@ -22,7 +22,8 @@
     margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: var(--bg); color: var(--text);
     display: flex; flex-direction: column; align-items: center;
-    min-height: 100vh; padding: 16px; overflow-x: hidden;
+    min-height: 100vh;
+    padding: 16px; overflow-x: hidden;
   }
   .header {
     width: 100%; max-width: 420px; display: flex; justify-content: space-between;
@@ -58,22 +59,18 @@
   .basket.correct { background: var(--success); border-color: var(--success); color: white; }
   .basket.wrong { background: var(--error); border-color: var(--error); color: white; }
 
-  .feedback-overlay {
-    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
-    font-size: 48px; pointer-events: none;
-  }
-
   .round-end {
-    width: 100%; max-width: 420px; text-align: center; margin-top: 60px;
+    width: 100%; max-width: 420px; text-align: center; margin-top: 40px;
   }
   .round-end h2 { font-size: 26px; margin-bottom: 8px; }
   .round-end p { color: var(--text-dim); font-size: 15px; margin-bottom: 24px; }
   .btn {
     background: var(--accent); color: white; border: none; padding: 16px 32px;
     border-radius: 14px; font-size: 17px; font-weight: 700; cursor: pointer; width: 100%;
-    max-width: 420px;
+    max-width: 420px; margin-bottom: 10px;
   }
   .btn:active { opacity: 0.85; }
+  .btn.secondary { background: var(--bg); color: var(--accent); border: 2px solid var(--accent); }
   .example-card {
     background: var(--card); border: 1px solid var(--border); border-radius: 16px;
     padding: 16px; margin-top: 14px; width: 100%; max-width: 420px; text-align: left;
@@ -82,11 +79,36 @@
   .example-card .it { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
   .example-card .ru { color: var(--text-dim); font-size: 14px; }
   .hidden { display: none !important; }
+
+  /* Экран выбора уровня */
+  .level-screen {
+    width: 100%; max-width: 420px; padding-top: 24px;
+  }
+  .level-screen h1 { font-size: 26px; margin-bottom: 4px; }
+  .level-screen .sub { color: var(--text-dim); font-size: 15px; margin-bottom: 24px; }
+  .level-card {
+    background: var(--card); border: 2px solid var(--border); border-radius: 16px;
+    padding: 18px 16px; margin-bottom: 12px; cursor: pointer; display: flex;
+    justify-content: space-between; align-items: center; transition: all .15s ease;
+  }
+  .level-card:active { transform: scale(0.98); }
+  .level-card .name { font-size: 18px; font-weight: 700; }
+  .level-card .desc { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
+  .level-card .badge {
+    background: var(--accent-light); color: var(--accent); font-weight: 700;
+    font-size: 13px; padding: 6px 12px; border-radius: 10px; white-space: nowrap;
+  }
 </style>
 </head>
 <body>
 
-<div id="game-screen">
+<div id="level-screen" class="level-screen">
+  <h1>🇮🇹 Italiano Tetris</h1>
+  <div class="sub">Выбери уровень и начни раунд (5 слов, ~5 минут)</div>
+  <div id="level-list"></div>
+</div>
+
+<div id="game-screen" class="hidden">
   <div class="header">
     <div class="stat" id="round-label">Слово 1/5</div>
     <div class="progress-wrap"><div class="progress-bar" id="progress"></div></div>
@@ -107,37 +129,93 @@
 <div id="end-screen" class="round-end hidden">
   <h2>🎉 Раунд пройден!</h2>
   <p id="end-stats">Ты выучил 5 слов</p>
-  <button class="btn" onclick="startRound()">Следующий раунд</button>
+  <button class="btn" onclick="startRound()">Ещё раунд (этот уровень)</button>
+  <button class="btn secondary" onclick="showLevelScreen()">Выбрать другой уровень</button>
 </div>
 
 <script>
 const tg = window.Telegram?.WebApp;
-if (tg) { tg.ready(); tg.expand(); }
-
-// Базовый словарь A1 — потом заменим на загрузку из БД/JSON
-const WORDS = [
-  { it: "ciao", ru: "привет/пока", wrong: ["grazie", "buono"], example_it: "Ciao, come stai?", example_ru: "Привет, как дела?" },
-  { it: "grazie", ru: "спасибо", wrong: ["prego", "scusa"], example_it: "Grazie mille per l'aiuto!", example_ru: "Большое спасибо за помощь!" },
-  { it: "acqua", ru: "вода", wrong: ["pane", "casa"], example_it: "Vorrei un bicchiere d'acqua.", example_ru: "Я бы хотел стакан воды." },
-  { it: "casa", ru: "дом", wrong: ["strada", "scuola"], example_it: "Vado a casa adesso.", example_ru: "Я сейчас иду домой." },
-  { it: "amico", ru: "друг", wrong: ["nemico", "fratello"], example_it: "Lui è il mio migliore amico.", example_ru: "Он мой лучший друг." }
-];
-
-let order = [];
-let current = 0;
-let score = 0;
-let fallTimer = null;
-
-function shuffle(arr) {
-  return [...arr].sort(() => Math.random() - 0.5);
+if (tg) {
+  tg.ready();
+  tg.expand();
+  if (tg.requestFullscreen) { try { tg.requestFullscreen(); } catch (e) {} }
+  if (tg.disableVerticalSwipes) { tg.disableVerticalSwipes(); }
+  const applyHeight = () => {
+    const h = tg.viewportStableHeight || tg.viewportHeight || window.innerHeight;
+    document.documentElement.style.height = h + 'px';
+    document.body.style.minHeight = h + 'px';
+  };
+  applyHeight();
+  tg.onEvent('viewportChanged', () => { tg.expand(); applyHeight(); });
+  window.addEventListener('load', () => { tg.expand(); applyHeight(); });
+  let tries = 0;
+  const retryTimer = setInterval(() => {
+    tg.expand(); applyHeight(); tries++;
+    if (tries > 8) clearInterval(retryTimer);
+  }, 150);
 }
 
+const LEVELS = [
+  { key: "A1", name: "A1 — Начальный", desc: "Базовые глаголы и бытовые фразы" },
+  { key: "A2", name: "A2 — Элементарный", desc: "Повседневное общение" },
+  { key: "B1", name: "B1 — Средний", desc: "Мнения, рассуждения" },
+  { key: "B2", name: "B2 — Выше среднего", desc: "Сложные конструкции" }
+];
+
+let WORD_BANK = {};
+let currentLevel = localStorage.getItem('it_level') || 'A1';
+let order = [], current = 0, score = 0, fallTimer = null;
+
+async function loadWords() {
+  const res = await fetch('words.json');
+  WORD_BANK = await res.json();
+  renderLevelList();
+}
+
+function getProgress(levelKey) {
+  return parseInt(localStorage.getItem('it_progress_' + levelKey) || '0', 10);
+}
+function setProgress(levelKey, learned) {
+  localStorage.setItem('it_progress_' + levelKey, String(learned));
+}
+
+function renderLevelList() {
+  const list = document.getElementById('level-list');
+  list.innerHTML = '';
+  LEVELS.forEach(lvl => {
+    const total = (WORD_BANK[lvl.key] || []).length;
+    const learned = Math.min(getProgress(lvl.key), total);
+    const card = document.createElement('div');
+    card.className = 'level-card';
+    card.onclick = () => { currentLevel = lvl.key; localStorage.setItem('it_level', lvl.key); startRound(); };
+    card.innerHTML = `
+      <div>
+        <div class="name">${lvl.name}</div>
+        <div class="desc">${lvl.desc}</div>
+      </div>
+      <div class="badge">${learned}/${total}</div>
+    `;
+    list.appendChild(card);
+  });
+}
+
+function showLevelScreen() {
+  document.getElementById('game-screen').classList.add('hidden');
+  document.getElementById('end-screen').classList.add('hidden');
+  document.getElementById('level-screen').classList.remove('hidden');
+  renderLevelList();
+}
+
+function shuffle(arr) { return [...arr].sort(() => Math.random() - 0.5); }
+
 function startRound() {
+  document.getElementById('level-screen').classList.add('hidden');
   document.getElementById('end-screen').classList.add('hidden');
   document.getElementById('game-screen').classList.remove('hidden');
-  order = shuffle(WORDS);
-  current = 0;
-  score = 0;
+
+  const pool = shuffle(WORD_BANK[currentLevel] || []);
+  order = pool.slice(0, Math.min(5, pool.length));
+  current = 0; score = 0;
   updateScore();
   nextWord();
 }
@@ -148,19 +226,17 @@ function updateScore() {
 
 function nextWord() {
   document.getElementById('example-card').style.display = 'none';
-  if (current >= order.length) {
-    endRound();
-    return;
-  }
+  if (current >= order.length) { endRound(); return; }
+
   const word = order[current];
-  document.getElementById('round-label').textContent = `Слово ${current + 1}/${order.length}`;
+  document.getElementById('round-label').textContent = `Слово ${current + 1}/${order.length} · ${currentLevel}`;
   document.getElementById('progress').style.width = `${(current / order.length) * 100}%`;
 
   const wordEl = document.getElementById('falling-word');
   wordEl.textContent = word.it;
   wordEl.style.transition = 'none';
   wordEl.style.top = '-60px';
-  void wordEl.offsetWidth; // reflow
+  void wordEl.offsetWidth;
   wordEl.style.transition = `top ${getSpeed()}s linear`;
 
   const options = shuffle([word.ru, ...word.wrong]);
@@ -174,45 +250,35 @@ function nextWord() {
     basketsEl.appendChild(b);
   });
 
-  requestAnimationFrame(() => {
-    wordEl.style.top = '280px';
-  });
+  requestAnimationFrame(() => { wordEl.style.top = '280px'; });
 
   clearTimeout(fallTimer);
-  fallTimer = setTimeout(() => {
-    handleAnswer(false, null, word);
-  }, getSpeed() * 1000);
+  fallTimer = setTimeout(() => { handleAnswer(false, null, word); }, getSpeed() * 1000);
 }
 
-function getSpeed() {
-  return 5; // секунд на падение — потом сделаем настройку
-}
+function getSpeed() { return 5; }
 
 function handleAnswer(isCorrect, basketEl, word) {
   clearTimeout(fallTimer);
   document.querySelectorAll('.basket').forEach(b => b.onclick = null);
+  if (basketEl) basketEl.classList.add(isCorrect ? 'correct' : 'wrong');
 
-  if (basketEl) {
-    basketEl.classList.add(isCorrect ? 'correct' : 'wrong');
-  }
   if (isCorrect) {
     score += 10;
     updateScore();
+    const learned = getProgress(currentLevel) + 1;
+    setProgress(currentLevel, learned);
     if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
   } else {
     if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
   }
 
-  // показываем карточку с примером использования
   const card = document.getElementById('example-card');
   document.getElementById('example-it').textContent = word.example_it;
   document.getElementById('example-ru').textContent = word.example_ru;
   card.style.display = 'block';
 
-  setTimeout(() => {
-    current++;
-    nextWord();
-  }, 1600);
+  setTimeout(() => { current++; nextWord(); }, 1600);
 }
 
 function endRound() {
@@ -222,7 +288,7 @@ function endRound() {
   if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
 }
 
-startRound();
+loadWords();
 </script>
 </body>
 </html>
