@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Italiano</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: #f5f5f0;
+    --card: #ffffff;
+    --accent: #4f7cff;
+    --accent-light: #e8edff;
+    --text: #1a1a1a;
+    --text-dim: #888;
+    --success: #34c759;
+    --error: #ff453a;
+    --border: #e0e0e0;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+  html { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100%; display: flex; flex-direction: column; align-items: center;
+    padding: env(safe-area-inset-top, 16px) 16px env(safe-area-inset-bottom, 24px);
+  }
+
+  /* ── ЭКРАН ВЫБОРА УРОВНЯ ── */
+  .level-screen { width: 100%; max-width: 400px; padding-top: 12px; }
+  .app-title { font-size: 22px; font-weight: 800; margin-bottom: 2px; }
+  .app-sub { font-size: 13px; color: var(--text-dim); margin-bottom: 20px; }
+  .level-card {
+    background: var(--card); border-radius: 16px; padding: 16px;
+    margin-bottom: 10px; cursor: pointer; display: flex;
+    justify-content: space-between; align-items: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    transition: transform .12s;
+  }
+  .level-card:active { transform: scale(0.97); }
+  .level-name { font-size: 16px; font-weight: 700; }
+  .level-desc { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+  .level-badge {
+    background: var(--accent-light); color: var(--accent);
+    font-weight: 700; font-size: 12px; padding: 5px 10px; border-radius: 8px;
+    white-space: nowrap; min-width: 48px; text-align: center;
+  }
+
+  /* ── ИГРОВОЙ ЭКРАН ── */
+  .game-screen { width: 100%; max-width: 400px; display: none; flex-direction: column; gap: 14px; }
+
+  .top-bar { display: flex; align-items: center; gap: 10px; }
+  .back-btn {
+    background: var(--card); border: none; border-radius: 10px;
+    padding: 8px 10px; font-size: 16px; cursor: pointer; line-height: 1;
+  }
+  .progress-wrap { flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .progress-bar { height: 100%; background: var(--accent); border-radius: 4px; transition: width .4s ease; }
+  .score-label { font-size: 14px; font-weight: 700; color: var(--accent); white-space: nowrap; }
+
+  /* карточка с предложением */
+  .sentence-card {
+    background: var(--card); border-radius: 20px; padding: 24px 20px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  }
+  .sentence-label { font-size: 11px; font-weight: 600; color: var(--text-dim); letter-spacing: .5px; text-transform: uppercase; margin-bottom: 12px; }
+  .sentence-ru { font-size: 20px; font-weight: 700; line-height: 1.3; margin-bottom: 18px; }
+  .sentence-it {
+    font-size: 18px; font-weight: 600; line-height: 1.5;
+    background: var(--bg); border-radius: 12px; padding: 14px 16px;
+  }
+  .gap {
+    display: inline-block; min-width: 100px; border-bottom: 3px solid var(--accent);
+    text-align: center; font-weight: 800; color: var(--accent);
+    vertical-align: bottom; padding: 0 4px; font-size: 18px;
+  }
+  .gap.filled-correct { color: var(--success); border-color: var(--success); }
+  .gap.filled-wrong { color: var(--error); border-color: var(--error); }
+
+  /* варианты ответа */
+  .options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .option-btn {
+    background: var(--card); border: 2px solid var(--border);
+    border-radius: 14px; padding: 16px 10px; text-align: center;
+    font-size: 15px; font-weight: 600; cursor: pointer; transition: all .12s;
+    line-height: 1.2;
+  }
+  .option-btn:active { transform: scale(0.96); }
+  .option-btn.correct { background: #e8faf0; border-color: var(--success); color: var(--success); }
+  .option-btn.wrong { background: #fff0f0; border-color: var(--error); color: var(--error); }
+  .option-btn.disabled { opacity: .5; pointer-events: none; }
+
+  /* подсказка после ответа */
+  .hint-card {
+    background: var(--card); border-radius: 16px; padding: 16px;
+    font-size: 14px; line-height: 1.5; display: none;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .hint-card .hint-label { font-size: 11px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+  .hint-card .hint-text { color: var(--text); }
+
+  .next-btn {
+    background: var(--accent); color: white; border: none; border-radius: 14px;
+    padding: 16px; font-size: 17px; font-weight: 700; cursor: pointer; width: 100%;
+    display: none;
+  }
+  .next-btn:active { opacity: .85; }
+
+  /* ── ФИНАЛЬНЫЙ ЭКРАН ── */
+  .end-screen { width: 100%; max-width: 400px; text-align: center; padding-top: 40px; display: none; }
+  .end-emoji { font-size: 56px; margin-bottom: 12px; }
+  .end-title { font-size: 24px; font-weight: 800; margin-bottom: 6px; }
+  .end-sub { font-size: 15px; color: var(--text-dim); margin-bottom: 28px; }
+  .end-btn {
+    background: var(--accent); color: white; border: none; border-radius: 14px;
+    padding: 16px; font-size: 17px; font-weight: 700; cursor: pointer; width: 100%; margin-bottom: 10px;
+  }
+  .end-btn.sec { background: transparent; color: var(--accent); border: 2px solid var(--accent); }
+  .end-btn:active { opacity: .85; }
+</style>
+</head>
+<body>
+
+<!-- ЭКРАН УРОВНЕЙ -->
+<div class="level-screen" id="levelScreen">
+  <div class="app-title">🇮🇹 Italiano</div>
+  <div class="app-sub">Заполни пропуск — выучи язык</div>
+  <div id="levelList"></div>
+</div>
+
+<!-- ИГРА -->
+<div class="game-screen" id="gameScreen">
+  <div class="top-bar">
+    <button class="back-btn" onclick="showLevels()">←</button>
+    <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+    <div class="score-label" id="scoreLabel">⭐ 0</div>
+  </div>
+
+  <div class="sentence-card">
+    <div class="sentence-label" id="roundLabel">Задание 1 / 5</div>
+    <div class="sentence-ru" id="sentenceRu"></div>
+    <div class="sentence-it" id="sentenceIt"></div>
+  </div>
+
+  <div class="options" id="options"></div>
+
+  <div class="hint-card" id="hintCard">
+    <div class="hint-label">Запомни</div>
+    <div class="hint-text" id="hintText"></div>
+  </div>
+
+  <button class="next-btn" id="nextBtn">Далее →</button>
+</div>
+
+<!-- ФИНАЛ -->
+<div class="end-screen" id="endScreen">
+  <div class="end-emoji" id="endEmoji">🎉</div>
+  <div class="end-title" id="endTitle">Раунд пройден!</div>
+  <div class="end-sub" id="endSub"></div>
+  <button class="end-btn" onclick="startRound()">Ещё раунд</button>
+  <button class="end-btn sec" onclick="showLevels()">Сменить уровень</button>
+</div>
+
+<script>
+/* ── Telegram init ── */
+const tg = window.Telegram?.WebApp;
+if (tg) {
+  tg.ready(); tg.expand();
+  if (tg.requestFullscreen) { try { tg.requestFullscreen(); } catch(e){} }
+  if (tg.disableVerticalSwipes) tg.disableVerticalSwipes();
+  tg.onEvent('viewportChanged', () => tg.expand());
+  let n = 0; const iv = setInterval(() => { tg.expand(); if (++n > 8) clearInterval(iv); }, 150);
+}
+
+/* ── данные ── */
+const LEVELS = [
+  { key:'A1', name:'A1 — Начальный',      desc:'Глаголы, артикли, предлоги' },
+  { key:'A2', name:'A2 — Элементарный',   desc:'Прошедшее время, союзы' },
+  { key:'B1', name:'B1 — Средний',        desc:'Сослагательное, условие' },
+  { key:'B2', name:'B2 — Выше среднего',  desc:'Официальный стиль, PLIDA' }
+];
+
+let BANK = {};
+let currentLevel = localStorage.getItem('it_level') || 'A1';
+let queue = [], idx = 0, score = 0, answered = false;
+
+async function loadWords() {
+  const r = await fetch('words.json');
+  BANK = await r.json();
+  renderLevels();
+}
+
+function getProg(k) { return parseInt(localStorage.getItem('it_p_'+k)||'0',10); }
+function addProg(k)  { localStorage.setItem('it_p_'+k, String(getProg(k)+1)); }
+
+/* ── экраны ── */
+function show(id) {
+  ['levelScreen','gameScreen','endScreen'].forEach(s => {
+    const el = document.getElementById(s);
+    el.style.display = (s === id) ? (s==='gameScreen' ? 'flex' : 'block') : 'none';
+  });
+}
+
+function showLevels() { renderLevels(); show('levelScreen'); }
+
+function renderLevels() {
+  const list = document.getElementById('levelList');
+  list.innerHTML = '';
+  LEVELS.forEach(l => {
+    const total = (BANK[l.key]||[]).length;
+    const done  = Math.min(getProg(l.key), total);
+    const card  = document.createElement('div');
+    card.className = 'level-card';
+    card.onclick = () => { currentLevel = l.key; localStorage.setItem('it_level',l.key); startRound(); };
+    card.innerHTML = `
+      <div>
+        <div class="level-name">${l.name}</div>
+        <div class="level-desc">${l.desc}</div>
+      </div>
+      <div class="level-badge">${done}/${total}</div>`;
+    list.appendChild(card);
+  });
+}
+
+/* ── игра ── */
+function shuffle(a) { return [...a].sort(()=>Math.random()-.5); }
+
+function startRound() {
+  const pool = shuffle(BANK[currentLevel]||[]);
+  queue = pool.slice(0, Math.min(7, pool.length));
+  idx = 0; score = 0;
+  document.getElementById('scoreLabel').textContent = '⭐ 0';
+  show('gameScreen');
+  showQuestion();
+}
+
+function showQuestion() {
+  answered = false;
+  const word = queue[idx];
+  const total = queue.length;
+
+  document.getElementById('roundLabel').textContent = `Задание ${idx+1} / ${total}`;
+  document.getElementById('progressBar').style.width = `${(idx/total)*100}%`;
+
+  /* русский перевод */
+  document.getElementById('sentenceRu').textContent = word.example_ru;
+
+  /* итальянское предложение с пропуском */
+  const itText = word.example_it;
+  /* ищем слово (it) в предложении без учёта регистра */
+  const regex = new RegExp('\\b' + word.it.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '\\b', 'i');
+  let sentenceHtml;
+  if (regex.test(itText)) {
+    sentenceHtml = itText.replace(regex, `<span class="gap" id="gap">_____</span>`);
+  } else {
+    /* если точного совпадения нет — прячем первое слово */
+    const parts = itText.split(' ');
+    parts[0] = `<span class="gap" id="gap">_____</span>`;
+    sentenceHtml = parts.join(' ');
+  }
+  document.getElementById('sentenceIt').innerHTML = sentenceHtml;
+
+  /* варианты */
+  const opts = shuffle([word.it, ...word.wrong]);
+  const optDiv = document.getElementById('options');
+  optDiv.innerHTML = '';
+  opts.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.className = 'option-btn';
+    btn.textContent = opt;
+    btn.onclick = () => handleAnswer(opt, word, btn);
+    optDiv.appendChild(btn);
+  });
+
+  document.getElementById('hintCard').style.display = 'none';
+  document.getElementById('nextBtn').style.display  = 'none';
+}
+
+function handleAnswer(chosen, word, btn) {
+  if (answered) return;
+  answered = true;
+  const correct = chosen === word.it;
+
+  /* подсветка кнопок */
+  document.querySelectorAll('.option-btn').forEach(b => {
+    b.classList.add('disabled');
+    if (b.textContent === word.it) b.classList.add('correct');
+  });
+  if (!correct) btn.classList.add('wrong');
+
+  /* заполняем пропуск */
+  const gap = document.getElementById('gap');
+  if (gap) {
+    gap.textContent = word.it;
+    gap.classList.add(correct ? 'filled-correct' : 'filled-wrong');
+  }
+
+  /* очки */
+  if (correct) { score += 10; addProg(currentLevel); }
+  document.getElementById('scoreLabel').textContent = `⭐ ${score}`;
+
+  /* хаптик */
+  if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred(correct ? 'success' : 'error');
+
+  /* подсказка */
+  const hint = document.getElementById('hintCard');
+  const hintText = document.getElementById('hintText');
+  hintText.textContent = `${word.it} = ${word.ru} · ${word.example_it}`;
+  hint.style.display = 'block';
+
+  /* кнопка "Далее" */
+  const nextBtn = document.getElementById('nextBtn');
+  nextBtn.style.display = 'block';
+  nextBtn.textContent = (idx + 1 >= queue.length) ? 'Завершить раунд' : 'Далее →';
+  nextBtn.onclick = () => {
+    idx++;
+    if (idx >= queue.length) endRound();
+    else showQuestion();
+  };
+}
+
+function endRound() {
+  show('endScreen');
+  const total = queue.length;
+  const pct = Math.round((score / (total*10)) * 100);
+  document.getElementById('endEmoji').textContent = pct >= 80 ? '🏆' : pct >= 50 ? '🎉' : '💪';
+  document.getElementById('endTitle').textContent = pct >= 80 ? 'Отлично!' : pct >= 50 ? 'Хорошо!' : 'Продолжай!';
+  document.getElementById('endSub').textContent = `${score} из ${total*10} очков · ${pct}% правильно`;
+  if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+}
+
+/* ── старт ── */
+loadWords().then(() => show('levelScreen'));
+</script>
+</body>
+</html>
