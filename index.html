@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Italiano Tetris</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
@@ -18,50 +18,79 @@
     --border: #ececec;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; height: auto; min-height: 100%;
+  }
   body {
-    margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: var(--bg); color: var(--text);
     display: flex; flex-direction: column; align-items: center;
-    min-height: 100vh;
-    padding: 16px; overflow-x: hidden;
+    padding: 12px 16px 32px;
+    /* ВАЖНО: разрешаем вертикальную прокрутку, чтобы ничего не обрезалось,
+       даже если Telegram не успел развернуть окно на полный экран */
+    overflow-x: hidden; overflow-y: auto;
   }
   .header {
     width: 100%; max-width: 420px; display: flex; justify-content: space-between;
-    align-items: center; margin-bottom: 12px;
+    align-items: center; margin-bottom: 10px;
   }
   .progress-wrap { flex: 1; height: 8px; background: var(--border); border-radius: 4px; margin: 0 12px; overflow: hidden; }
   .progress-bar { height: 100%; background: var(--accent); width: 0%; transition: width .4s ease; border-radius: 4px; }
   .stat { font-size: 14px; color: var(--text-dim); font-weight: 600; white-space: nowrap; }
   .score { font-size: 14px; font-weight: 700; color: var(--accent); }
 
+  /* Уменьшенная высота игровой зоны, чтобы корзины гарантированно влезали
+     даже в свёрнутом (не fullscreen) состоянии Telegram */
   .game-area {
-    width: 100%; max-width: 420px; height: 380px; background: var(--card);
+    width: 100%; max-width: 420px; height: 290px; background: var(--card);
     border-radius: 20px; position: relative; overflow: hidden;
     box-shadow: 0 2px 16px rgba(0,0,0,0.04); border: 1px solid var(--border);
   }
   .falling-word {
     position: absolute; left: 50%; transform: translateX(-50%);
     background: var(--accent-light); color: var(--accent);
-    padding: 14px 28px; border-radius: 14px; font-size: 22px; font-weight: 700;
+    padding: 12px 24px; border-radius: 14px; font-size: 20px; font-weight: 700;
     top: -60px; transition: top linear; white-space: nowrap;
   }
   .baskets {
-    position: absolute; bottom: 12px; left: 0; right: 0;
-    display: flex; gap: 8px; padding: 0 12px;
+    position: absolute; bottom: 10px; left: 0; right: 0;
+    display: flex; gap: 8px; padding: 0 10px;
   }
   .basket {
     flex: 1; background: var(--bg); border: 2px solid var(--border);
-    border-radius: 14px; padding: 14px 8px; text-align: center;
-    font-size: 15px; font-weight: 600; color: var(--text); cursor: pointer;
+    border-radius: 14px; padding: 12px 6px; text-align: center;
+    font-size: 14px; font-weight: 600; color: var(--text); cursor: pointer;
     transition: all .15s ease; user-select: none;
   }
   .basket:active { transform: scale(0.96); }
   .basket.correct { background: var(--success); border-color: var(--success); color: white; }
   .basket.wrong { background: var(--error); border-color: var(--error); color: white; }
 
-  .round-end {
-    width: 100%; max-width: 420px; text-align: center; margin-top: 40px;
+  /* Экран сборки предложения */
+  .sentence-area {
+    width: 100%; max-width: 420px; background: var(--card);
+    border-radius: 20px; padding: 20px 16px; box-shadow: 0 2px 16px rgba(0,0,0,0.04);
+    border: 1px solid var(--border); display: none;
   }
+  .sentence-prompt { font-size: 14px; color: var(--text-dim); margin-bottom: 6px; }
+  .sentence-ru { font-size: 17px; font-weight: 700; margin-bottom: 16px; }
+  .sentence-slots {
+    min-height: 46px; border: 2px dashed var(--border); border-radius: 12px;
+    padding: 8px; display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px;
+  }
+  .sentence-pool { display: flex; flex-wrap: wrap; gap: 8px; }
+  .word-chip {
+    background: var(--accent-light); color: var(--accent); font-weight: 700;
+    padding: 10px 14px; border-radius: 10px; font-size: 15px; cursor: pointer; user-select: none;
+  }
+  .word-chip.placed { background: var(--card); color: var(--text); border: 2px solid var(--border); }
+  .word-chip:active { transform: scale(0.95); }
+  .sentence-check-btn {
+    margin-top: 14px; width: 100%; background: var(--accent); color: white; border: none;
+    padding: 12px; border-radius: 12px; font-weight: 700; font-size: 15px; cursor: pointer;
+  }
+
+  .round-end { width: 100%; max-width: 420px; text-align: center; margin-top: 30px; }
   .round-end h2 { font-size: 26px; margin-bottom: 8px; }
   .round-end p { color: var(--text-dim); font-size: 15px; margin-bottom: 24px; }
   .btn {
@@ -73,26 +102,23 @@
   .btn.secondary { background: var(--bg); color: var(--accent); border: 2px solid var(--accent); }
   .example-card {
     background: var(--card); border: 1px solid var(--border); border-radius: 16px;
-    padding: 16px; margin-top: 14px; width: 100%; max-width: 420px; text-align: left;
+    padding: 14px; margin-top: 12px; width: 100%; max-width: 420px; text-align: left;
     display: none;
   }
-  .example-card .it { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
-  .example-card .ru { color: var(--text-dim); font-size: 14px; }
+  .example-card .it { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+  .example-card .ru { color: var(--text-dim); font-size: 13px; }
   .hidden { display: none !important; }
 
-  /* Экран выбора уровня */
-  .level-screen {
-    width: 100%; max-width: 420px; padding-top: 24px;
-  }
-  .level-screen h1 { font-size: 26px; margin-bottom: 4px; }
-  .level-screen .sub { color: var(--text-dim); font-size: 15px; margin-bottom: 24px; }
+  .level-screen { width: 100%; max-width: 420px; padding-top: 16px; }
+  .level-screen h1 { font-size: 24px; margin-bottom: 4px; }
+  .level-screen .sub { color: var(--text-dim); font-size: 14px; margin-bottom: 20px; }
   .level-card {
     background: var(--card); border: 2px solid var(--border); border-radius: 16px;
-    padding: 18px 16px; margin-bottom: 12px; cursor: pointer; display: flex;
+    padding: 16px; margin-bottom: 10px; cursor: pointer; display: flex;
     justify-content: space-between; align-items: center; transition: all .15s ease;
   }
   .level-card:active { transform: scale(0.98); }
-  .level-card .name { font-size: 18px; font-weight: 700; }
+  .level-card .name { font-size: 17px; font-weight: 700; }
   .level-card .desc { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
   .level-card .badge {
     background: var(--accent-light); color: var(--accent); font-weight: 700;
@@ -120,6 +146,14 @@
     <div class="baskets" id="baskets"></div>
   </div>
 
+  <div class="sentence-area" id="sentence-area">
+    <div class="sentence-prompt">Собери предложение по-итальянски:</div>
+    <div class="sentence-ru" id="sentence-ru"></div>
+    <div class="sentence-slots" id="sentence-slots"></div>
+    <div class="sentence-pool" id="sentence-pool"></div>
+    <button class="sentence-check-btn" id="sentence-check-btn">Проверить</button>
+  </div>
+
   <div class="example-card" id="example-card">
     <div class="it" id="example-it"></div>
     <div class="ru" id="example-ru"></div>
@@ -140,17 +174,11 @@ if (tg) {
   tg.expand();
   if (tg.requestFullscreen) { try { tg.requestFullscreen(); } catch (e) {} }
   if (tg.disableVerticalSwipes) { tg.disableVerticalSwipes(); }
-  const applyHeight = () => {
-    const h = tg.viewportStableHeight || tg.viewportHeight || window.innerHeight;
-    document.documentElement.style.height = h + 'px';
-    document.body.style.minHeight = h + 'px';
-  };
-  applyHeight();
-  tg.onEvent('viewportChanged', () => { tg.expand(); applyHeight(); });
-  window.addEventListener('load', () => { tg.expand(); applyHeight(); });
+  tg.onEvent('viewportChanged', () => tg.expand());
+  window.addEventListener('load', () => tg.expand());
   let tries = 0;
   const retryTimer = setInterval(() => {
-    tg.expand(); applyHeight(); tries++;
+    tg.expand(); tries++;
     if (tries > 8) clearInterval(retryTimer);
   }, 150);
 }
@@ -165,6 +193,7 @@ const LEVELS = [
 let WORD_BANK = {};
 let currentLevel = localStorage.getItem('it_level') || 'A1';
 let order = [], current = 0, score = 0, fallTimer = null;
+let sentenceSlots = []; // выбранные чипы в текущем порядке
 
 async function loadWords() {
   const res = await fetch('words.json');
@@ -226,6 +255,9 @@ function updateScore() {
 
 function nextWord() {
   document.getElementById('example-card').style.display = 'none';
+  document.getElementById('sentence-area').style.display = 'none';
+  document.getElementById('game-area').style.display = 'block';
+
   if (current >= order.length) { endRound(); return; }
 
   const word = order[current];
@@ -250,7 +282,7 @@ function nextWord() {
     basketsEl.appendChild(b);
   });
 
-  requestAnimationFrame(() => { wordEl.style.top = '280px'; });
+  requestAnimationFrame(() => { wordEl.style.top = '230px'; });
 
   clearTimeout(fallTimer);
   fallTimer = setTimeout(() => { handleAnswer(false, null, word); }, getSpeed() * 1000);
@@ -278,13 +310,70 @@ function handleAnswer(isCorrect, basketEl, word) {
   document.getElementById('example-ru').textContent = word.example_ru;
   card.style.display = 'block';
 
-  setTimeout(() => { current++; nextWord(); }, 1600);
+  setTimeout(() => {
+    // после каждого пойманного слова — мини-задание на сборку предложения
+    showSentenceBuilder(word);
+  }, 1400);
+}
+
+function showSentenceBuilder(word) {
+  document.getElementById('example-card').style.display = 'none';
+  document.getElementById('game-area').style.display = 'none';
+  const area = document.getElementById('sentence-area');
+  area.style.display = 'block';
+
+  document.getElementById('sentence-ru').textContent = word.example_ru;
+
+  // разбиваем итальянское предложение на токены (убираем финальную точку отдельно)
+  const clean = word.example_it.replace(/[.!?]+$/, '');
+  const endPunct = word.example_it.slice(clean.length);
+  const tokens = clean.split(' ');
+
+  sentenceSlots = [];
+  const slotsEl = document.getElementById('sentence-slots');
+  const poolEl = document.getElementById('sentence-pool');
+  slotsEl.innerHTML = '';
+  poolEl.innerHTML = '';
+
+  const shuffledTokens = shuffle(tokens.map((t, i) => ({ t, id: i })));
+  shuffledTokens.forEach(({ t, id }) => {
+    const chip = document.createElement('div');
+    chip.className = 'word-chip';
+    chip.textContent = t;
+    chip.dataset.id = id;
+    chip.onclick = () => {
+      if (chip.classList.contains('placed')) return;
+      chip.classList.add('placed');
+      const slotChip = document.createElement('div');
+      slotChip.className = 'word-chip';
+      slotChip.textContent = t;
+      slotChip.onclick = () => {
+        chip.classList.remove('placed');
+        slotChip.remove();
+        sentenceSlots = sentenceSlots.filter(s => s.id !== id);
+      };
+      slotsEl.appendChild(slotChip);
+      sentenceSlots.push({ t, id });
+    };
+    poolEl.appendChild(chip);
+  });
+
+  document.getElementById('sentence-check-btn').onclick = () => {
+    const built = sentenceSlots.map(s => s.t).join(' ') + endPunct;
+    const correct = built.toLowerCase() === word.example_it.toLowerCase();
+    if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred(correct ? 'success' : 'error');
+    if (correct) {
+      score += 5;
+      updateScore();
+    }
+    setTimeout(() => { current++; nextWord(); }, correct ? 700 : 1200);
+  };
 }
 
 function endRound() {
   document.getElementById('game-screen').classList.add('hidden');
   document.getElementById('end-screen').classList.remove('hidden');
-  document.getElementById('end-stats').textContent = `Ты набрал ${score} очков из ${order.length * 10}`;
+  document.getElementById('end-stats').textContent = `Ты набрал ${score} очков из ${order.length * 15}`;
   if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
 }
 
